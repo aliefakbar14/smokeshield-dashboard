@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmokeShield-IoT</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --haze:#cdd3c4; --paper:#eef0e6; --peat:#2b2119; --muted:#586155; --line:#b4bdab;
+    --moss:#4d6b36; --amber:#b87a0c; --ember:#d3441c; --river:#9fb4b5; --land:#dde3d3; --forest:#6f8a52;
+  }
+  @media (prefers-color-scheme:dark) {
+    :root { --haze:#161c18; --paper:#212a24; --peat:#e9ede3; --muted:#9ba797; --line:#37433a;
+      --moss:#86b45f; --amber:#e3a63c; --ember:#ff6b42; --river:#35565a; --land:#1b231e; --forest:#86b45f; }
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:"Source Sans 3",system-ui,sans-serif; background:var(--haze); color:var(--peat); line-height:1.45; min-height:100vh; font-variant-numeric:tabular-nums; }
+  body.alarm::after { content:""; position:fixed; inset:0; pointer-events:none; border:6px solid var(--ember); animation:blink 1s steps(2) infinite; z-index:50; }
+  @keyframes blink { 50% { opacity:0; } }
+  #smog { position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0; transition:opacity 1.4s; mix-blend-mode:multiply;
+    background:radial-gradient(130% 90% at 85% 0%, #c0801c 0%, #7a5226 42%, transparent 78%); }
+  .wrap { position:relative; z-index:1; max-width:1120px; margin:0 auto; padding:22px 18px 40px; }
+
+  header { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand svg { flex:none; }
+  h1 { font-family:"Barlow Condensed",sans-serif; font-size:2.5rem; font-weight:700; line-height:1; letter-spacing:.01em; }
+  .sub { color:var(--muted); font-size:.95rem; margin-top:3px; }
+  .sub a { color:var(--peat); font-weight:600; }
+  .btns { display:flex; gap:10px; flex-wrap:wrap; }
+  .grp { display:flex; gap:6px; padding:4px; border:1px solid var(--line); border-radius:9px; background:color-mix(in srgb, var(--paper) 55%, transparent); }
+  button { font:inherit; font-size:.92rem; font-weight:600; cursor:pointer; border-radius:6px; padding:7px 13px; border:1.5px solid var(--peat); background:var(--peat); color:var(--paper); transition:background .15s, transform .1s; }
+  button:active { transform:translateY(1px); }
+  button.ghost { background:transparent; color:var(--peat); border-color:transparent; }
+  button.ghost:hover { background:color-mix(in srgb, var(--peat) 10%, transparent); }
+  button.on { background:var(--moss); border-color:var(--moss); color:var(--paper); }
+  #fire { background:var(--ember); border-color:var(--ember); color:#fff; }
+  button:focus-visible, .mk:focus-visible, .sum .box:focus-visible { outline:3px solid var(--amber); outline-offset:2px; }
+
+  #bar { position:sticky; top:10px; z-index:20; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 18px; border-radius:10px; background:var(--paper); border:1px solid var(--line); border-left:10px solid var(--moss); box-shadow:0 8px 20px -14px rgba(0,0,0,.55); }
+  #bar.warn { border-left-color:var(--amber); }
+  #bar.bad { border-color:var(--ember); background:var(--ember); color:#fff; }
+  #bar b { font-family:"Barlow Condensed",sans-serif; font-size:1.65rem; font-weight:600; display:block; line-height:1.15; }
+  #bar span { font-size:.95rem; }
+  #bar button { background:#fff; color:var(--ember); border-color:#fff; }
+
+  .box { background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+  h2 { font-family:"Barlow Condensed",sans-serif; font-size:1.4rem; font-weight:600; margin-bottom:10px; }
+  .grid { display:grid; grid-template-columns:1.35fr 1fr; gap:14px; margin-top:14px; }
+  @media (max-width:860px) { .grid { grid-template-columns:1fr; } }
+
+  .sum { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px; }
+  .sum .box { border-top:5px solid var(--c); padding:11px 14px; cursor:pointer; transition:background .15s; }
+  .sum .box:hover { background:color-mix(in srgb, var(--paper) 80%, var(--c)); }
+  .sum .box.cur { outline:2px solid var(--peat); outline-offset:-1px; }
+  .sum .box b { font-family:"Barlow Condensed",sans-serif; font-size:1.6rem; font-weight:600; display:block; line-height:1.15; }
+  .sum .box span { font-size:.85rem; color:var(--muted); }
+  .rb { display:block; height:5px; background:var(--line); border-radius:3px; margin-top:8px; overflow:hidden; }
+  .rb u { display:block; height:100%; background:var(--c); transition:width .5s; }
+  @media (max-width:560px) { .sum { grid-template-columns:1fr; } }
+
+  svg.map { width:100%; height:auto; display:block; background:var(--land); border-radius:6px; }
+  .contour { fill:none; stroke:var(--line); stroke-width:1.4; }
+  .river { fill:none; stroke:var(--river); stroke-width:12; opacity:.85; stroke-linecap:round; }
+  .tree { fill:var(--forest); opacity:.5; } .row-l { stroke:var(--forest); stroke-width:2; opacity:.45; } .town rect { fill:var(--line); }
+  .north { fill:var(--muted); font:600 13px "Barlow Condensed",sans-serif; text-anchor:middle; }
+  .mk { cursor:pointer; }
+  .mk circle.dot { fill:var(--c); stroke:var(--paper); stroke-width:3; }
+  .mk text { font-family:"Barlow Condensed",sans-serif; font-size:15px; font-weight:600; fill:var(--peat); text-anchor:middle; paint-order:stroke; stroke:var(--land); stroke-width:3px; }
+  .mk .rk { font-size:13px; font-weight:500; fill:var(--muted); }
+  .mk .halo { fill:var(--c); opacity:0; transition:opacity .4s; }
+  .mk.s-warn .halo { opacity:.2; } .mk.s-bad .halo { opacity:.26; }
+  .mk .sel { fill:none; stroke:var(--peat); stroke-width:2; opacity:0; }
+  .mk.isel .sel { opacity:1; }
+  .mk .ring { fill:none; stroke:var(--ember); stroke-width:3; opacity:0; }
+  .mk.hot .ring { animation:ring 1.6s ease-out infinite; }
+  @keyframes ring { 0% { r:10; opacity:.9; } 100% { r:34; opacity:0; } }
+  .s-ok { --c:var(--moss); } .s-warn { --c:var(--amber); } .s-bad { --c:var(--ember); } .s-off { --c:var(--muted); }
+  .mk.s-off .dot { fill:#9aa093; }
+  .puff { fill:#3b3530; opacity:0; }
+  .plume.on .puff { animation:drift 4.5s ease-out infinite; }
+  @keyframes drift { 0% { opacity:0; transform:translate(0,0) scale(.5); } 25% { opacity:.55; } 100% { opacity:0; transform:translate(90px,-70px) scale(2.2); } }
+  @media (prefers-reduced-motion:reduce) { .plume.on .puff, .mk.hot .ring, body.alarm::after { animation:none; } .plume.on .puff { opacity:.35; } #smog { transition:none; } }
+  .legend { display:flex; gap:14px; font-size:.85rem; color:var(--muted); margin-top:10px; flex-wrap:wrap; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .tab { background:transparent; color:var(--muted); border:1.5px solid var(--line); padding:4px 11px; border-radius:999px; }
+  .tab[aria-pressed="true"] { background:var(--peat); color:var(--paper); border-color:var(--peat); }
+
+  #risk { display:grid; grid-template-columns:auto 1fr; gap:2px 16px; align-items:center; padding:6px 0 14px; border-bottom:1px solid var(--line); }
+  #risk .big { font-family:"Barlow Condensed",sans-serif; font-size:3.4rem; font-weight:700; line-height:1; color:var(--c); grid-row:1 / span 2; }
+  #risk .big small { font-size:1rem; color:var(--muted); font-weight:500; }
+  #risk b { font-family:"Barlow Condensed",sans-serif; font-size:1.25rem; font-weight:600; color:var(--c); }
+  #risk span { font-size:.88rem; color:var(--muted); }
+
+  .row { display:grid; grid-template-columns:76px 1fr; gap:2px 12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); }
+  .row:last-of-type { border-bottom:0; }
+  .row .n { display:none; }
+  .row .v { font-family:"Barlow Condensed",sans-serif; font-size:2rem; font-weight:600; line-height:1; grid-column:2; }
+  .row .v small { font-size:.92rem; color:var(--muted); font-weight:500; margin-left:6px; }
+  .row .st { font-size:.78rem; font-weight:600; background:var(--c); color:var(--paper); grid-column:1; grid-row:1 / span 2; align-self:center; justify-self:start; padding:2px 10px; border-radius:999px; }
+  .track { position:relative; height:10px; border-radius:5px; grid-column:2; margin-top:5px; }
+  .track i.f { position:absolute; inset:0 auto 0 0; background:var(--c); border-radius:5px; transition:width .5s; opacity:.9; }
+  .track i.t { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--peat); opacity:.55; }
+
+  .power { display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-top:12px; font-size:.95rem; }
+  .power b { font-family:"Barlow Condensed",sans-serif; font-size:1.5rem; font-weight:600; }
+  .bat { flex:1; min-width:120px; height:10px; background:var(--line); border-radius:5px; overflow:hidden; }
+  .bat i { display:block; height:100%; background:var(--moss); transition:width .5s; }
+
+  canvas { width:100%; height:260px; display:block; }
+  #stats { font-size:.85rem; color:var(--muted); margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:.93rem; }
+  th, td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  tbody tr:hover { background:color-mix(in srgb, var(--paper) 85%, var(--c, var(--line))); }
+  .badge { display:inline-block; font-size:.75rem; font-weight:600; padding:1px 9px; border-radius:999px; background:var(--c); color:var(--paper); }
+  .wide { margin-top:14px; }
+  .table-wrap { overflow-x:auto; }
+  .note { color:var(--muted); font-size:.82rem; margin-top:16px; }
+</style>
+</head>
+<body>
+<div id="smog" aria-hidden="true"></div>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg width="36" height="40" viewBox="0 0 34 38" aria-hidden="true"><path d="M17 2 31 7v11c0 9-6 15-14 18C9 33 3 27 3 18V7z" fill="var(--peat)"/><path d="M12 27c5 0 8-2 8-5s-5-3-5-6 3-4 5-6" fill="none" stroke="var(--paper)" stroke-width="2.6" stroke-linecap="round"/></svg>
+      <div>
+        <h1>SmokeShield</h1>
+        <p class="sub" id="status">Pemantauan udara dan peringatan dini asap lahan · data simulasi</p>
+      </div>
+    </div>
+    <div class="btns">
+      <div class="grp">
+        <button id="sound" type="button" class="ghost">Aktifkan suara</button>
+        <button id="toggle" type="button" class="ghost">Jeda</button>
+      </div>
+      <div class="grp">
+        <button id="fire" type="button" class="ghost">Simulasikan asap</button>
+        <button id="off" type="button" class="ghost">Simulasikan node mati</button>
+        <button id="export" type="button" class="ghost">Ekspor log</button>
+      </div>
+    </div>
+  </header>
+
+  <section id="bar" aria-live="assertive"></section>
+
+  <div class="sum" id="sum"></div>
+
+  <div class="grid">
+    <section class="box">
+      <h2>Peta sebaran node</h2>
+      <svg class="map" viewBox="0 0 640 400" role="img" aria-label="Peta sebaran node sensor">
+        <defs>
+          <pattern id="trees" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="3" class="tree"/><circle cx="11" cy="10" r="3" class="tree"/></pattern>
+          <pattern id="rows" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-14)"><path d="M0 5H10" class="row-l"/></pattern>
+        </defs>
+        <g class="contour">
+          <ellipse cx="330" cy="195" rx="300" ry="175" transform="rotate(-14 330 195)"/>
+          <ellipse cx="325" cy="200" rx="250" ry="145" transform="rotate(-18 325 200)"/>
+          <ellipse cx="320" cy="198" rx="200" ry="115" transform="rotate(-22 320 198)"/>
+          <ellipse cx="315" cy="195" rx="150" ry="85" transform="rotate(-26 315 195)"/>
+          <ellipse cx="310" cy="192" rx="100" ry="56" transform="rotate(-30 310 192)"/>
+          <ellipse cx="305" cy="190" rx="52" ry="28" transform="rotate(-34 305 190)"/>
+        </g>
+        <ellipse cx="150" cy="140" rx="105" ry="68" fill="url(#trees)" transform="rotate(-14 150 140)"/>
+        <rect x="300" y="188" width="130" height="92" rx="10" fill="url(#rows)"/>
+        <g class="town"><rect x="488" y="84" width="14" height="10" rx="2"/><rect x="508" y="90" width="16" height="11" rx="2"/><rect x="528" y="82" width="12" height="10" rx="2"/><rect x="494" y="118" width="15" height="10" rx="2"/><rect x="518" y="116" width="14" height="12" rx="2"/><rect x="540" y="104" width="12" height="9" rx="2"/></g>
+        <path class="river" d="M-10 318 C110 270 210 350 330 308 S530 238 650 282"/>
+        <g transform="translate(604 34)"><path d="M0 -14 6 4 0 0 -6 4Z" fill="var(--muted)"/><text class="north" y="20">U</text></g>
+        <g id="plumes"></g>
+        <g id="marks"></g>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--moss)"></i>Normal</span>
+        <span><i style="background:var(--amber)"></i>Perlu dipantau</span>
+        <span><i style="background:var(--ember)"></i>Indikasi asap</span>
+        <span>Klik node untuk melihat detail</span>
+      </div>
+    </section>
+
+    <section class="box">
+      <h2 id="nodeTitle">Node</h2>
+      <p class="sub" id="nodeLoc" style="margin:-6px 0 10px"></p>
+      <div class="tabs" id="nodeTabs"></div>
+      <div id="risk"></div>
+      <div id="rows"></div>
+      <div class="power">
+        <div>Panel surya <b id="e-solar">–</b></div>
+        <div>Baterai <b id="e-bat">–</b></div>
+        <div id="e-state"></div>
+        <div class="bat"><i id="e-bar"></i></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="box wide">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h2 id="chartTitle">Grafik</h2>
+      <div class="tabs" id="tabs" style="margin:0"></div>
+    </div>
+    <canvas id="chart" role="img" aria-label="Grafik data sensor terbaru"></canvas>
+    <p id="stats"></p>
+  </section>
+
+  <section class="box wide">
+    <h2>Riwayat peringatan</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Waktu</th><th>Node</th><th>Tingkat</th><th>Kejadian</th></tr></thead>
+        <tbody id="log"><tr><td colspan="4" style="color:var(--muted)">Belum ada peringatan.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="note">Ambang batas, bobot indeks risiko, dan kapasitas panel/baterai adalah nilai contoh. Sesuaikan dengan kalibrasi sensor dan spesifikasi komponen pada rancangan prototipe.</p>
+</div>
+
+<script>
+// ====== 1. Konfigurasi ======
+// dir: 1 = bahaya jika naik, -1 = bahaya jika turun. smoke: ikut validasi indikasi asap. w: bobot indeks risiko.
+const SENSORS = [
+  { id:"pm",   name:"PM2.5",      unit:"µg/m³", min:0,  max:250, warn:55, bad:150, start:25, fire:190, dir:1,  smoke:true,  w:.35 },
+  { id:"co",   name:"Gas / CO",   unit:"ppm",   min:0,  max:60,  warn:9,  bad:35,  start:2,  fire:42,  dir:1,  smoke:true,  w:.30 },
+  { id:"temp", name:"Suhu",       unit:"°C",    min:24, max:50,  warn:35, bad:40,  start:30, fire:43,  dir:1,  smoke:true,  w:.20 },
+  { id:"hum",  name:"Kelembapan", unit:"%",     min:15, max:100, warn:50, bad:35,  start:75, fire:30,  dir:-1, smoke:false, w:.15 }
+];
+const NODES = [
+  { id:"A", name:"Node A · Hutan",       say:"Node A, area hutan",       comm:"LoRa",    bat:82, x:150, y:140, lat:-1.1500, lon:116.7900 },
+  { id:"B", name:"Node B · Perkebunan",  say:"Node B, area perkebunan",  comm:"Seluler", bat:64, x:365, y:235, lat:-1.2000, lon:116.8400 },
+  { id:"C", name:"Node C · Permukiman",  say:"Node C, area permukiman",  comm:"Seluler", bat:91, x:510, y:105, lat:-1.1300, lon:116.8800 }
+];
+const PANEL_WATT = 10, LOAD_WATT = 1.5, BAT_WH = 37, MAX_POINTS = 40, TICK_MS = 2000;
+const CONFIRM = 2;        // pembacaan beruntun untuk menetapkan alarm (anti alarm palsu)
+const HOLD = 3;           // pembacaan normal beruntun sebelum alarm dilepas (anti berkedip)
+const REPEAT_MS = 30000;  // pengumuman lokasi diulang selama alarm aktif
+const OFFLINE_MS = 7000;  // tanpa data selama ini = node dianggap mati
+const TREND_WIN = 4, TREND_RATE = 0.25; // naik > 25% jarak baseline→bahaya dalam 4 pembacaan
+const LABEL = { ok:"Normal", warn:"Pantau", bad:"Asap", off:"Offline" };
+// Sumber data. mode "sim" = simulasi. mode "http" = ambil JSON dari url, format:
+// [{ "id":"A", "pm":30, "co":2, "temp":31, "hum":74, "solar":6.2, "bat":80 }, ...]
+const SOURCE = { mode:"sim", url:"/api/nodes" };
+
+NODES.forEach(n => {
+  n.data = {}; SENSORS.forEach(s => n.data[s.id] = [s.start]);
+  n.fireTicks = 0; n.level = "ok"; n.solar = 0; n.detail = ""; n.confirm = 0; n.clear = 0;
+  n.simOff = false; n.lastSeen = Date.now();
+});
+let active = "A", activeSensor = "pm", running = true;
+const node = () => NODES.find(n => n.id === active);
+const $ = id => document.getElementById(id);
+const last = (n, s) => n.data[s.id].at(-1);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const isOffline = n => Date.now() - n.lastSeen > OFFLINE_MS;
+
+// ====== 2. Sumber data ======
+function ingest(n, r) {
+  SENSORS.forEach(s => {
+    if (typeof r[s.id] !== "number") return;
+    const arr = n.data[s.id]; arr.push(clamp(r[s.id], s.min, s.max));
+    if (arr.length > MAX_POINTS) arr.shift();
+  });
+  if (typeof r.solar === "number") n.solar = r.solar;
+  if (typeof r.bat === "number") n.bat = clamp(r.bat, 0, 100);
+  n.lastSeen = Date.now();
+}
+function readSim(n) {
+  if (n.simOff) return null;
+  const r = {};
+  SENSORS.forEach(s => {
+    const target = n.fireTicks > 0 ? s.fire : s.start;
+    const noise = (Math.random() - .5) * (s.max - s.min) * 0.03;
+    r[s.id] = last(n, s) + (target - last(n, s)) * 0.18 + noise;
+  });
+  if (n.fireTicks > 0) n.fireTicks--;
+  const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
+  r.solar = PANEL_WATT * Math.max(0, Math.sin(Math.PI * (h - 6) / 12)) * (0.6 + Math.random() * 0.4);
+  r.bat = clamp(n.bat + (r.solar - LOAD_WATT) * 0.04, 5, 100);
+  return r;
+}
+
+// ====== 3. Logika status ======
+function levelOf(s, v) {
+  if (s.dir === 1) return v >= s.bad ? "bad" : v >= s.warn ? "warn" : "ok";
+  return v <= s.bad ? "bad" : v <= s.warn ? "warn" : "ok";
+}
+// Sensor asap yang naik cepat (deteksi dini sebelum ambang terlewati).
+function risingSensors(n) {
+  return SENSORS.filter(s => s.smoke && n.data[s.id].length > TREND_WIN &&
+    (last(n, s) - n.data[s.id].at(-1 - TREND_WIN)) / (s.bad - s.start) > TREND_RATE);
+}
+// Indeks risiko 0-100: seberapa jauh tiap sensor bergerak dari kondisi normal menuju ambang bahaya.
+function risk(n) {
+  return Math.round(100 * SENSORS.reduce((a, s) => {
+    const v = last(n, s), p = s.dir === 1 ? (v - s.start) / (s.bad - s.start) : (s.start - v) / (s.start - s.bad);
+    return a + s.w * clamp(p, 0, 1);
+  }, 0));
+}
+// Validasi multi-sensor: indikasi asap hanya jika minimal 2 indikator melewati ambang.
+function nodeStatus(n) {
+  if (isOffline(n)) return { level:"off", detail:`Tidak ada data sejak ${Math.round((Date.now() - n.lastSeen) / 1000)} detik lalu` };
+  const hit = SENSORS.filter(s => s.smoke && levelOf(s, last(n, s)) !== "ok");
+  if (hit.length >= 2) return { level:"bad", detail:`${hit.map(s => s.name).join(" dan ")} melewati ambang` };
+  if (hit.length === 1) return { level:"warn", detail:`${hit[0].name} melewati ambang, menunggu sensor lain` };
+  const up = risingSensors(n);
+  if (up.length >= 2) return { level:"warn", detail:`${up.map(s => s.name).join(" dan ")} naik cepat (deteksi dini)` };
+  return { level:"ok", detail:"Semua indikator di bawah ambang" };
+}
+// Konfirmasi + penahan alarm supaya tidak berkedip atau salah bunyi karena satu lonjakan.
+function settle(n) {
+  const st = nodeStatus(n);
+  let lvl = st.level, detail = st.detail;
+  if (lvl === "bad" && n.level !== "bad") {
+    n.confirm++; n.clear = 0;
+    if (n.confirm < CONFIRM) { lvl = "warn"; detail = "Dua indikator terlewati, menunggu konfirmasi pembacaan berikutnya"; }
+  } else if (lvl !== "bad" && n.level === "bad" && lvl !== "off") {
+    n.clear++; n.confirm = 0;
+    if (n.clear < HOLD) { lvl = "bad"; detail = "Indikator mulai turun, alarm ditahan sampai stabil"; }
+  } else { n.confirm = 0; n.clear = 0; }
+  n.detail = detail; return lvl;
+}
+
+// ====== 4. Suara: sirene + pengumuman ======
+let audioOn = false, ctx = null, osc = null, sweep = null, silenced = false;
+function startSiren() {
+  if (osc || !audioOn) return;
+  osc = ctx.createOscillator(); const g = ctx.createGain();
+  osc.type = "sawtooth"; g.gain.value = 0.07;
+  osc.connect(g).connect(ctx.destination); osc.start();
+  let hi = false;
+  const step = () => { osc.frequency.linearRampToValueAtTime(hi ? 620 : 920, ctx.currentTime + 0.7); hi = !hi; };
+  osc.frequency.value = 620; step(); sweep = setInterval(step, 750);
+}
+function stopSiren() {
+  if (!osc) return;
+  clearInterval(sweep); try { osc.stop(); } catch (e) {} osc = null;
+}
+function speak(text) {
+  if (!audioOn || !("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(text); u.lang = "id-ID"; u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+// Lokasi: sektor mata angin relatif terhadap pusat peta + koordinat GPS node.
+const SECTORS = ["utara","timur laut","timur","tenggara","selatan","barat daya","barat","barat laut"];
+const sector = n => SECTORS[Math.round(((Math.atan2(n.x - 320, 200 - n.y) * 180 / Math.PI + 360) % 360) / 45) % 8];
+const coordShort = n => `${Math.abs(n.lat).toFixed(4)}°${n.lat >= 0 ? "LU" : "LS"}, ${Math.abs(n.lon).toFixed(4)}°${n.lon >= 0 ? "BT" : "BB"}`;
+const coordSpeech = n => `${Math.abs(n.lat).toFixed(4).replace(".", ",")} derajat lintang ${n.lat >= 0 ? "utara" : "selatan"}, ${Math.abs(n.lon).toFixed(4).replace(".", ",")} derajat bujur ${n.lon >= 0 ? "timur" : "barat"}`;
+let lastAnnounce = 0;
+function announce(n) {
+  const v = id => Math.round(last(n, SENSORS.find(s => s.id === id)));
+  speak(`Peringatan kebakaran. Indikasi asap terdeteksi di ${n.say}, sektor ${sector(n)} dari pusat area pantau. Koordinat ${coordSpeech(n)}. ` +
+        `Suhu ${v("temp")} derajat Celsius, PM dua koma lima ${v("pm")} mikrogram per meter kubik. Mohon verifikasi lapangan.`);
+}
+function announceAll() { NODES.filter(n => n.level === "bad").forEach(announce); lastAnnounce = Date.now(); }
+$("sound").onclick = e => {
+  audioOn = !audioOn;
+  if (audioOn) { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); speak("Suara peringatan aktif"); if (NODES.some(n => n.level === "bad")) announceAll(); }
+  else { stopSiren(); speechSynthesis.cancel(); }
+  e.target.textContent = audioOn ? "Suara aktif" : "Aktifkan suara";
+  e.target.className = audioOn ? "on" : "ghost";
+};
+
+// ====== 5. Riwayat (tersimpan di browser) ======
+let LOG = [];
+try { LOG = JSON.parse(localStorage.getItem("smokeshield-log") || "[]"); } catch (e) {}
+function addLog(n, lvl, text) {
+  LOG.unshift({ t:new Date().toISOString(), node:n.name, lvl, text });
+  LOG = LOG.slice(0, 100);
+  try { localStorage.setItem("smokeshield-log", JSON.stringify(LOG)); } catch (e) {}
+  renderLog();
+}
+function renderLog() {
+  if (!LOG.length) return;
+  $("log").innerHTML = LOG.slice(0, 10).map(l =>
+    `<tr class="s-${l.lvl}"><td>${new Date(l.t).toLocaleTimeString("id-ID")}</td><td>${l.node}</td><td><span class="badge">${LABEL[l.lvl]}</span></td><td>${l.text}</td></tr>`).join("");
+}
+$("export").onclick = () => {
+  const csv = "waktu,node,tingkat,kejadian\n" + LOG.map(l => [l.t, l.node, LABEL[l.lvl], l.text].map(v => `"${v}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv" })); a.download = "riwayat-smokeshield.csv"; a.click();
+};
+
+// ====== 6. Render ======
+const NS = "http://www.w3.org/2000/svg";
+NODES.forEach(n => {
+  const p = document.createElementNS(NS, "g"); p.setAttribute("class", "plume"); p.id = "pl-" + n.id;
+  [[0,0,16,0],[6,-4,22,.8],[-4,-8,18,1.6],[8,-10,26,2.4],[0,-14,20,3.2]].forEach(([dx,dy,r,delay]) => {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("class", "puff"); c.setAttribute("cx", n.x + dx); c.setAttribute("cy", n.y + dy); c.setAttribute("r", r);
+    c.style.animationDelay = delay + "s"; p.appendChild(c);
+  });
+  $("plumes").appendChild(p);
+  const g = document.createElementNS(NS, "g"); g.id = "mk-" + n.id; g.setAttribute("tabindex", 0); g.setAttribute("role", "button");
+  g.setAttribute("aria-label", n.name);
+  g.innerHTML = `<circle class="halo" cx="${n.x}" cy="${n.y}" r="30"/><circle class="ring" cx="${n.x}" cy="${n.y}" r="10"/><circle class="sel" cx="${n.x}" cy="${n.y}" r="17"/>
+    <circle class="dot" cx="${n.x}" cy="${n.y}" r="9"/><text x="${n.x}" y="${n.y + 34}">${n.name.split(" · ")[1]}</text>
+    <text class="rk" id="rk-${n.id}" x="${n.x}" y="${n.y + 50}"></text>`;
+  g.onclick = () => { active = n.id; render(); };
+  g.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); active = n.id; render(); } };
+  $("marks").appendChild(g);
+  const b = document.createElement("button");
+  b.className = "tab"; b.type = "button"; b.id = "nt-" + n.id; b.textContent = n.id;
+  b.setAttribute("aria-label", n.name); b.onclick = () => { active = n.id; render(); };
+  $("nodeTabs").appendChild(b);
+  const c = document.createElement("div"); c.className = "box"; c.id = "sm-" + n.id; c.tabIndex = 0; c.setAttribute("role", "button");
+  c.onclick = () => { active = n.id; render(); };
+  c.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); active = n.id; render(); } }; $("sum").appendChild(c);
+});
+const zones = s => {
+  const w = (s.warn - s.min) / (s.max - s.min) * 100, b = (s.bad - s.min) / (s.max - s.min) * 100, t = c => `color-mix(in srgb, var(--${c}) 24%, transparent)`;
+  return s.dir === 1 ? `linear-gradient(90deg,${t("moss")} ${w}%,${t("amber")} ${w}% ${b}%,${t("ember")} ${b}%)`
+                     : `linear-gradient(90deg,${t("ember")} ${b}%,${t("amber")} ${b}% ${w}%,${t("moss")} ${w}%)`;
+};
+SENSORS.forEach(s => {
+  $("rows").insertAdjacentHTML("beforeend",
+    `<div class="row" id="r-${s.id}"><span class="st" id="rs-${s.id}"></span>
+     <div class="v"><span id="v-${s.id}">–</span><small>${s.unit} · ${s.name}</small></div>
+     <div class="track" style="background:${zones(s)}"><i class="f" id="f-${s.id}"></i>
+     <i class="t" style="left:${(s.warn - s.min) / (s.max - s.min) * 100}%"></i>
+     <i class="t" style="left:${(s.bad - s.min) / (s.max - s.min) * 100}%"></i></div></div>`);
+  const b = document.createElement("button");
+  b.className = "tab"; b.type = "button"; b.textContent = s.name; b.dataset.id = s.id;
+  b.onclick = () => { activeSensor = s.id; render(); };
+  $("tabs").appendChild(b);
+});
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function drawChart() {
+  const s = SENSORS.find(x => x.id === activeSensor), d = node().data[s.id];
+  $("chartTitle").textContent = `${s.name} (${s.unit}) · ${node().name}`;
+  const c = $("chart"), dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  c.width = W * dpr; c.height = H * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const pad = { l:40, r:10, t:10, b:20 };
+  const x = i => pad.l + (i / (MAX_POINTS - 1)) * (W - pad.l - pad.r);
+  const y = v => pad.t + (1 - (v - s.min) / (s.max - s.min)) * (H - pad.t - pad.b);
+  g.font = "12px 'Source Sans 3',sans-serif"; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = s.min + (s.max - s.min) * i / 4, yy = y(v);
+    g.strokeStyle = css("--line"); g.beginPath(); g.moveTo(pad.l, yy); g.lineTo(W - pad.r, yy); g.stroke();
+    g.fillStyle = css("--muted"); g.fillText(v.toFixed(0), 4, yy + 4);
+  }
+  g.fillStyle = css("--muted"); g.textAlign = "left"; g.fillText(`${MAX_POINTS * TICK_MS / 1000} dtk lalu`, pad.l, H - 4);
+  g.textAlign = "right"; g.fillText("sekarang", W - pad.r, H - 4); g.textAlign = "left";
+  [[s.warn, "--amber", "pantau"], [s.bad, "--ember", "bahaya"]].forEach(([v, col, t]) => {
+    g.setLineDash([5, 4]); g.strokeStyle = css(col);
+    g.beginPath(); g.moveTo(pad.l, y(v)); g.lineTo(W - pad.r, y(v)); g.stroke();
+    g.setLineDash([]); g.fillStyle = css(col); g.fillText(t, pad.l + 4, y(v) - 4);
+  });
+  g.setLineDash([]); g.lineJoin = "round";
+  const off = MAX_POINTS - d.length, px = i => x(i + off);
+  g.beginPath(); d.forEach((v, i) => i ? g.lineTo(px(i), y(v)) : g.moveTo(px(i), y(v)));
+  g.lineTo(px(d.length - 1), y(s.min)); g.lineTo(px(0), y(s.min)); g.closePath();
+  g.globalAlpha = .1; g.fillStyle = css("--peat"); g.fill(); g.globalAlpha = 1;
+  g.strokeStyle = css("--peat"); g.lineWidth = 2.4; g.beginPath();
+  d.forEach((v, i) => i ? g.lineTo(px(i), y(v)) : g.moveTo(px(i), y(v))); g.stroke();
+  const lv = d.at(-1); g.fillStyle = css({ ok:"--moss", warn:"--amber", bad:"--ember" }[levelOf(s, lv)]);
+  g.beginPath(); g.arc(px(d.length - 1), y(lv), 5, 0, 7); g.fill();
+  const mx = Math.max(...d), avg = d.reduce((a, b) => a + b, 0) / d.length;
+  $("stats").textContent = `Terakhir ${lv.toFixed(1)} · Rata-rata ${avg.toFixed(1)} · Tertinggi ${mx.toFixed(1)} ${s.unit}`;
+}
+
+function render() {
+  const n = node();
+  const bads = NODES.filter(m => m.level === "bad"), warns = NODES.filter(m => m.level === "warn"), offs = NODES.filter(m => m.level === "off");
+  const offNote = offs.length ? `<span>Tidak ada data dari ${offs.map(m => "Node " + m.id).join(", ")}. Periksa daya atau jaringan.</span>` : "";
+  const bar = $("bar");
+  if (bads.length) {
+    bar.className = "bad";
+    bar.innerHTML = `<div><b>Indikasi asap: ${bads.map(m => m.say).join("; ")}</b><span>${bads[0].detail}. Lokasi: ${bads.map(m => `Node ${m.id}, sektor ${sector(m)}, ${coordShort(m)}`).join("; ")}. Verifikasi lapangan disarankan.</span></div>` +
+      (silenced ? `<span>Alarm dibungkam</span>` : `<button id="mute" type="button">Bungkam alarm</button>`) +
+      (audioOn ? `<button id="repeat" type="button">Ulangi pengumuman</button>` : `<span>Suara belum aktif</span>`);
+    if ($("repeat")) $("repeat").onclick = announceAll;
+    if ($("mute")) $("mute").onclick = () => { silenced = true; stopSiren(); speechSynthesis.cancel(); render(); };
+  } else if (warns.length) {
+    bar.className = "warn";
+    bar.innerHTML = `<div><b>Perlu dipantau: ${warns.map(m => m.say).join("; ")}</b><span>${warns[0].detail}</span></div>${offNote}`;
+  } else if (offs.length) {
+    bar.className = "warn";
+    bar.innerHTML = `<div><b>${offs.length} node offline</b>${offNote}</div>`;
+  } else {
+    bar.className = "";
+    bar.innerHTML = `<div><b>Semua node normal</b><span>Tidak ada indikasi asap dari ${NODES.length} node</span></div>`;
+  }
+  document.body.classList.toggle("alarm", bads.length > 0 && !silenced);
+  $("smog").style.opacity = Math.min(.5, Math.max(...NODES.filter(m => m.level !== "off").map(risk)) / 100 * .6);
+  document.title = bads.length ? "⚠ Indikasi asap · SmokeShield" : "SmokeShield-IoT";
+
+  NODES.forEach(m => {
+    const k = "s-" + m.level, rk = risk(m);
+    $("mk-" + m.id).setAttribute("class", `mk ${k}${m.id === active ? " isel" : ""}${m.level === "bad" ? " hot" : ""}`);
+    $("pl-" + m.id).setAttribute("class", "plume" + (m.level === "bad" ? " on" : ""));
+    $("nt-" + m.id).setAttribute("aria-pressed", m.id === active);
+    $("rk-" + m.id).textContent = m.level === "off" ? "offline" : m.level === "bad" ? "asap · risiko " + rk : "risiko " + rk;
+    const sm = $("sm-" + m.id); sm.className = "box " + k + (m.id === active ? " cur" : "");
+    sm.innerHTML = `<span>${m.name}</span><b>${m.level === "off" ? "Offline" : "Risiko " + rk + " · " + LABEL[m.level]}</b><i class="rb"><u style="width:${m.level === "off" ? 0 : rk}%"></u></i>`;
+  });
+  const off = n.level === "off", rk = risk(n);
+  $("nodeTitle").textContent = `${n.name} · ${n.comm}`;
+  $("nodeLoc").innerHTML = `Sektor ${sector(n)} · ${coordShort(n)} · <a href="https://www.google.com/maps?q=${n.lat},${n.lon}" target="_blank" rel="noopener">Buka di Maps</a>`;
+  const rcls = off ? "s-off" : rk >= 60 ? "s-bad" : rk >= 30 ? "s-warn" : "s-ok";
+  $("risk").className = rcls;
+  $("risk").innerHTML = `<div class="big">${off ? "–" : rk}<small>/100</small></div><b>${off ? "Node offline" : "Indeks risiko · " + LABEL[n.level]}</b><span>${n.detail}</span>`;
+  SENSORS.forEach(s => {
+    const v = last(n, s), lvl = off ? "off" : levelOf(s, v), r = $("r-" + s.id);
+    r.className = "row s-" + lvl;
+    $("v-" + s.id).textContent = v.toFixed(1);
+    $("rs-" + s.id).textContent = LABEL[lvl];
+    $("f-" + s.id).style.width = ((v - s.min) / (s.max - s.min) * 100) + "%";
+  });
+  const charging = n.solar > LOAD_WATT, hrs = n.bat / 100 * BAT_WH / LOAD_WATT;
+  $("e-solar").textContent = n.solar.toFixed(1) + " W";
+  $("e-bat").textContent = n.bat.toFixed(0) + "% · " + (3.3 + n.bat / 100 * 0.9).toFixed(2) + " V";
+  $("e-state").textContent = charging ? "Sedang mengisi" : `Memakai baterai · sisa ±${hrs.toFixed(0)} jam`;
+  $("e-bar").style.width = n.bat + "%";
+  $("e-bar").style.background = n.bat < 20 ? css("--ember") : n.bat < 40 ? css("--amber") : css("--moss");
+  [...$("tabs").children].forEach(t => t.setAttribute("aria-pressed", t.dataset.id === activeSensor));
+  $("off").textContent = n.simOff ? "Hidupkan node " + n.id : "Simulasikan node mati";
+  drawChart();
+}
+
+async function tick() {
+  if (!running) return;
+  if (SOURCE.mode === "http") {
+    try { (await (await fetch(SOURCE.url, { cache:"no-store" })).json()).forEach(r => { const n = NODES.find(m => m.id === r.id); if (n) ingest(n, r); }); } catch (e) {}
+  } else NODES.forEach(n => { const r = readSim(n); if (r) ingest(n, r); });
+  NODES.forEach(n => {
+    const prev = n.level, lvl = settle(n);
+    n.level = lvl;
+    if (lvl === prev) return;
+    if (lvl === "bad") { addLog(n, "bad", `Indikasi asap di sektor ${sector(n)} (${coordShort(n)}): ${n.detail}`); announce(n); lastAnnounce = Date.now(); silenced = false; }
+    else if (lvl === "off") addLog(n, "off", "Node tidak mengirim data");
+    else if (lvl === "warn" && prev !== "bad") addLog(n, "warn", n.detail);
+    else if (lvl === "ok") addLog(n, "ok", prev === "off" ? "Node kembali online" : "Kembali normal");
+  });
+  const anyBad = NODES.some(n => n.level === "bad");
+  if (!anyBad) silenced = false;
+  if (anyBad && !silenced) startSiren(); else stopSiren();
+  if (anyBad && !silenced && audioOn && Date.now() - lastAnnounce > REPEAT_MS) announceAll();
+  render();
+}
+
+$("fire").onclick = () => { node().fireTicks = 25; };
+$("off").onclick = () => { node().simOff = !node().simOff; if (!node().simOff) node().lastSeen = Date.now(); render(); };
+$("toggle").onclick = e => {
+  running = !running;
+  if (!running) stopSiren(); else NODES.forEach(n => n.lastSeen = Date.now());
+  e.target.textContent = running ? "Jeda" : "Lanjutkan";
+  $("status").textContent = running ? "Pemantauan udara dan peringatan dini asap lahan · " + (SOURCE.mode === "sim" ? "data simulasi" : "data langsung") : "Dijeda";
+};
+window.addEventListener("resize", drawChart);
+renderLog(); tick(); setInterval(tick, TICK_MS);
+</script>
+</body>
+</html>
